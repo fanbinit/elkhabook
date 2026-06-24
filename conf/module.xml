@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module>
+	<grants>
+		<grant name="getElkhabookConfig" default="member" />
+	</grants>
+	<eventHandlers>
+		<eventHandler beforeAction="member.dispMemberInfo" class="view" method="triggerBeforeDispMemberModule" />
+		<eventHandler before="communication.addFriend" class="controller" method="beforeAddFriend" />
+		<eventHandler after="communication.addFriend" class="controller" method="afterAddFriend" />
+		<eventHandler before="communication.deleteFriend" class="controller" method="beforeDeleteFriend" />
+		<eventHandler after="communication.deleteFriend" class="controller" method="afterDeleteFriend" />
+	</eventHandlers>
+	<actions>
+		<action name="dispElkhabookAdminConfig" type="view" menu_name="elkhabook" admin_index="true" />
+		<action name="procElkhabookAdminInsertConfig" type="controller" />
+		<!--
+		<action name="dispElkhabookIndex" type="view" index="true" standalone="false">
+			<route route="$member_srl:int" priority="20" />
+			<route route="@$target_id:any" priority="10" />
+		</action>
+		-->
+		<action name="dispElkhabookIndex" type="view" index="true" standalone="false" route="@$target_id:any" global-route="true" />
+		<action name="getElkhabookFriendList" type="model" standalone="true" />
+		<action name="getElkhabookConfig" type="model" standalone="true" />
+		<action name="getElkhabookList" type="model" standalone="true" />
+	</actions>
+	<menus>
+		<menu name="elkhabook" type="all">
+			<title>mylog</title>
+		</menu>
+	</menus>
+</module>
