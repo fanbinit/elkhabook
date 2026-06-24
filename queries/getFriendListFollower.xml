@@ -1,3 +1,6 @@
+<!--
+내가 일방적으로 상대를 친추 했다. (=단방향)
+-->
 <query action="select">
 	<tables>
 		<table name="member_friend" alias="f" />

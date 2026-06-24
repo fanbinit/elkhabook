@@ -8,13 +8,7 @@
 		</table>
 	</tables>
 	<columns>
-		<column name="c.document_srl" alias="document_srl" />
-		<column name="c.content" alias="content" />
-		<column name="c.regdate" alias="regdate" />
-		<column name="c.module_srl" alias="module_srl" />
-		<column name="c.comment_srl" alias="comment_srl" />
-		<column name="c.is_secret" alias="is_secret" />
-		<column name="c.parent_srl" alias="parent_srl" />
+		<column name="c.*" />
 
 		<column name="p.document_srl" alias="p_document_srl" />
 		<column name="p.content" alias="p_content" />
@@ -23,6 +17,9 @@
 		<column name="p.comment_srl" alias="p_comment_srl" />
 		<column name="p.is_secret" alias="p_is_secret" />
 		<column name="p.parent_srl" alias="p_parent_srl" />
+		<column name="p.member_srl" alias="p_member_srl" />
+		<column name="p.nick_name" alias="p_nick_name" />
+		<column name="p.status" alias="p_status" />
 	</columns>
 	<conditions>
 		<condition operation="in" column="c.module_srl" var="s_module_srl" />

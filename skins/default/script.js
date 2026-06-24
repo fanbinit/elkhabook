@@ -135,13 +135,45 @@
 		return false;
 	};
 
+	// 전체 공개, 비공개 등 개인 설정을 가능하게
+	$(document).on('click', '.procElkhabookMyConfig', function(e){
+		var params = {
+			'name': $(this).data('name'),
+			'contents': $(this).data('contents')
+		};
+		$.exec_json('elkhabook.procElkhabookMyConfig', params, function(p){
+			if(typeof(p.procElkhabookMyConfig) == 'string')
+			{
+				$('.getElkhabookMyConfig[data-name]').each(function(){
+					if($(this).data('name') === params.name)
+					{
+						this.outerHTML = p.procElkhabookMyConfig;
+						return false;
+					}
+				});
+			}
+			setTimeout(function(){
+				alert(p.message);
+			}, 1);
+		});
+		return false;
+	});
+
+	// pjax 대응
 	$(document).on('click', 'a.getElkhabookList[href]', function(e) {
 		var params = {
 			'board' : this.href.getQuery('board'),
-			'page': '',
-			'cpage': '',
-			'epage': ''
+			'doc_type' : this.href.getQuery('doc_type'),
+			'member_srl' : window.elkhabook_member_srl
 		};
+		if(params.doc_type === '')
+		{
+			var matches = this.href.match(/\/([a-z]+)[^/]*$/); // 짧은 주소만 지원
+			if(matches !== null)
+			{
+				params.doc_type = matches[1];
+			}
+		}
 		var page = Number(this.href.getQuery('page'));
 		var cpage = Number(this.href.getQuery('cpage'));
 		var epage = Number(this.href.getQuery('epage'));
@@ -151,27 +183,24 @@
 			params.cpage = cpage;
 		else if(epage)
 			params.epage = epage;
+		var url = this.href;
 
-		window.getElkhabookList(params);
+		var $getElkhabookList = $('.elkhabook > .getElkhabookList');
+		params.show_count = $getElkhabookList.data('show_count');
 
-		return false;
-	});
-	window.getElkhabookList = function(params)
-	{
-		params.member_srl = window.elkhabook_member_srl;
 		$.exec_json('elkhabook.getElkhabookList', params, function(p){
 			if(typeof(p.getElkhabookList) == 'string')
 			{
-				var url = location.href.setQuery('board', params.board).setQuery('page', params.page).setQuery('cpage', params.cpage).setQuery('epage', params.epage);
-				history.pushState(p, '', url);
-				$('.elkhabook > .sidebar_r.getElkhabookList').html(p.getElkhabookList);
+				history.pushState(p, '', url); // history.replaceState(null, url);
+				$getElkhabookList.html(p.getElkhabookList);
 			}
 			else
 			{
 				alert(p.message);
 			}
 		});
-	};
+		return false;
+	});
 	window.addEventListener('popstate', function(e) {
 		var tpl = '';
 		try {

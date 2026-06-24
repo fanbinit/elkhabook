@@ -8,7 +8,7 @@ $elkhabook_config = $oModel->getConfig();
 
 \Context::setCanonicalUrl( $oModel->getUrl('dispMemberInfo', $_member_info->member_srl ?? 0, 'getNotEncodedFullUrl') );
 
-$oModel->getElkhabookFriendList($_member_info->member_srl ?? 0, 1);
+$oModel->getElkhabookFriendList($_member_info->member_srl ?? 0);
 $count_info = $oModel->getElkhabookCountInfo($_member_info->member_srl ?? 0);
 
 $oModuleModel = getModel('module');
@@ -19,23 +19,19 @@ $board = $board ?? '';
 
 $member_config = \MemberModel::getMemberConfig();
 $_mid = $member_config->mid ?: $mid;
+require_once($tpl_path . 'invertColor.func.php');
+ob_start();
 }
 <style>
-.elkhabook,
-.elkhabook a,
-.elkhabook .docs h3.hx,
-.elkhabook_skin_default_color { color:{$elkhabook_config->skin_colorset}; }
-.elkhabookPC:before,
-.elkhabookM .sidebar_l,
-.elkhabook .docs li .doc .hx:after,
-.elkhabook .sidebar_r.navi:before,
-.elkhabook_skin_default_background { background-color:{$elkhabook_config->skin_colorset}; }
-.elkhabook .docs h3.hx,
-.elkhabook .docs li.circle .doc .hx:before { border-color:{$elkhabook_config->skin_colorset}; }
+.elkhabook { --elkhabook-color:{$elkhabook_config->skin_colorset}; }
+.color_scheme_dark .elkhabook { --elkhabook-color:{@ echo elkhabook\invertColor($elkhabook_config->skin_colorset); }; }
 </style>
 <script>
-	window.elkhabook_member_srl = {$_member_info->member_srl};
+window.elkhabook_member_srl = {$_member_info->member_srl};
 </script>
+{@
+\Context::addHtmlHeader(ob_get_clean());
+}
 <load target="style.css" />
 <load target="script.min.js" />
 
@@ -45,7 +41,7 @@ $_mid = $member_config->mid ?: $mid;
 <div class="sidebar_r navi">
 	<ul>
 		<!--@foreach($logged_info->menu_list as $key=>$val)-->
-		<!--@if($key==$act || $oModel->getAct($key) == $act)--> <li class="on">{lang($val)}</li> <!--@else--> <li><a href="{getUrl('', 'act', $key, 'mid', $_mid)}">{lang($val)}</a></li> <!--@end-->
+		<!--@if(strlen($act ?? '') && ($key==$act || $oModel->getAct($key) == $act))--> <li class="on">{lang($val)}</li> <!--@else--> <li><a href="{getUrl('', 'act', $key, 'mid', $_mid)}">{lang($val)}</a></li> <!--@end-->
 		<!--@endforeach-->
 	</ul>
 	<ul class="hr">
@@ -69,7 +65,7 @@ $_mid = $member_config->mid ?: $mid;
 		</div>
 
 		<div class="hx">
-			<h2><a href="javascript:;" onclick="jQuery(this).addClass('member_'+{$_member_info->member_srl});">{$_member_info->nick_name}</a></h2>
+			<h2><a href="javascript:void(0);" onclick="jQuery(this).addClass('member_'+{$_member_info->member_srl});return false;">{$_member_info->nick_name}</a></h2>
 		</div>
 
 		<!--// 팔로우 | 언 팔로우 -->
@@ -206,14 +202,11 @@ $_mid = $member_config->mid ?: $mid;
 	endforeach;
 	}
 </div>
-
-
-<div class="sidebar_r getElkhabookList">
-	{@
-	$oModel->getElkhabookList();
-	echo $oModel->get('getElkhabookList');
-	}
-</div>
+{@
+// $show_count = 1; // 초기 화면이 탭 형태로 1개만 보여진다면 이 값에 1 선언합니다. 예를들어 2 값을 넣으면 3번째 목록부터 빈 값을 제공하여 부하가 덜 발생합니다.
+$oModel->getElkhabookList();
+echo '<div class="sidebar_r getElkhabookList" data-show_count="'.($show_count ?? 99).'">' . $oModel->get('getElkhabookList') . '</div>';
+}
 </div>
 {@
 $document_srl = 0;

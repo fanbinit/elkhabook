@@ -1,17 +1,17 @@
 <?php
 
 namespace elkhabook;
-require_once(_XE_PATH_.'modules/comment/comment.item.php');
+require_once(\RX_BASEDIR.'modules/comment/comment.item.php');
 class elkhatalk extends \commentItem
 {
-	var $elkhatalk = TRUE;
+	var bool $elkhatalk = TRUE;
 	/*public function getPermanentUrl() : string
 	{
 	}*/
 	public function isGranted() : bool
 	{
 		$logged_info = \Context::get('logged_info');
-		if(!is_object($logged_info) || !$logged_info->member_srl)
+		if(!is_object($logged_info) || !($logged_info->member_srl ?? 0))
 		{
 			return FALSE;
 		}
@@ -32,7 +32,7 @@ class elkhatalk extends \commentItem
 		}
 		return '?';
 	}
-	public function getContent2()
+	public function getContent2() : string
 	{
 		$logged_info = \Context::get('logged_info');
 		if($this->get('option')!='D' || (is_object($logged_info) && $logged_info->is_admin=='Y'))
@@ -41,33 +41,33 @@ class elkhatalk extends \commentItem
 		}
 		return \Context::getLang('elkhabook_delete_chat');
 	}
-	public function getProfileImage()
+	public function getProfileImage() : string
 	{
 		$member_srl = (INT)$this->get('member_srl');
-		if($member_srl)
+		if($member_srl > 0)
 		{
 			$member_info = \MemberModel::getMemberInfoByMemberSrl($member_srl);
-			if(is_object($member_info) && $member_info->member_srl)
+			if(is_object($member_info) && ($member_info->member_srl ?? 0))
 			{
-				return $member_info->profile_image->src;
+				return $member_info->profile_image->src ?? '';
 			}
 		}
-		return FALSE;
+		return '';
 	}
-	public function getNickName()
+	public function getNickName() : string
 	{
 		$member_srl = (INT)$this->get('member_srl');
-		if($member_srl)
+		if($member_srl > 0)
 		{
 			$member_info = \MemberModel::getMemberInfoByMemberSrl($member_srl);
-			if(is_object($member_info) && $member_info->member_srl)
+			if(is_object($member_info) && ($member_info->member_srl ?? 0))
 			{
 				return strip_tags($member_info->nick_name);
 			}
 		}
 		return '[?]';
 	}
-	function getRegdate($format = 'Y.m.d H:i:s', $conversion = true)
+	function getRegdate($format = 'Y.m.d H:i:s', $conversion = true) : string
 	{
 		return date($format, strtotime($this->get('regdate')));
 	}

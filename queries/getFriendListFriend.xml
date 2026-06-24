@@ -1,3 +1,6 @@
+<!--
+서로 친추 했다.
+-->
 <query action="select">
 	<tables>
 		<table name="member_friend" alias="f" />

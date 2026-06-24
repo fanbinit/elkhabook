@@ -3,8 +3,8 @@
 		<table name="member_friend" />
 	</tables>
 	<conditions>
-		<condition operation="equal" column="member_srl" var="member_srl" filter="number" notnull="notnull" />
-		<condition operation="equal" column="target_srl" var="target_srl" filter="number" pipe="and" />
+		<condition operation="in" column="member_srl" var="member_srl" filter="number" notnull="notnull" />
+		<condition operation="in" column="target_srl" var="target_srl" filter="number" pipe="and" />
 		<condition operation="in" column="friend_srl" var="friend_srl_list" pipe="and" />
 	</conditions>
 	<navigation>

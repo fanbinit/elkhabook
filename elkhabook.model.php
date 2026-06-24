@@ -1,7 +1,17 @@
 <?php
 class ElkhabookModel extends Elkhabook
 {
-	public function getElkhabookFriendButton(int $member_srl = 0)
+	var array $count_info = []; // 팔로워, 팔로잉, 친구의 카운트 php 캐시
+	var array $member_srl_groups = [[]/* $sequence => [1,2,3,4,5] */];
+	var array $doc_types = [
+		'following' => '팔로잉',
+		'followers' => '팔로워',
+		'friends' => '친구',
+		'votes' => '추천',
+		'scraps' => '스크랩'
+	];
+	var array $voted_counts = [];
+	public function getElkhabookFriendButton(int $member_srl = 0) : \baseObject
 	{
 		$member_srl = $member_srl ?: (INT)Context::get('target_srl');
 		$me_member_srl = is_object($logged_info = \Context::get('logged_info')) && $logged_info->member_srl ? $logged_info->member_srl : 0;
@@ -24,8 +34,9 @@ class ElkhabookModel extends Elkhabook
 			$count_info['팔로워'] + $count_info['친구']
 		);
 		$this->add('tpl_button', $tpl);
+		return $this;
 	}
-	public function getElkhabookConfig()
+	public function getElkhabookConfig() : \baseObject
 	{
 		$config = $this->getConfig();
 		$target_srl = (INT)\Context::get('target_srl');
@@ -42,6 +53,7 @@ class ElkhabookModel extends Elkhabook
 		$elkhabook_config->confirm_follow = sprintf(\Context::getLang('elkhabook_confirm_follow'), $config->follow_point);
 		$elkhabook_config->confirm_unfollow = sprintf(\Context::getLang('elkhabook_confirm_unfollow'), $config->follow_point);
 		$this->add('config', $elkhabook_config);
+		return $this;
 	}
 	public function getElkhabookCountInfo(INT $member_srl) : array
 	{
@@ -49,8 +61,7 @@ class ElkhabookModel extends Elkhabook
 		{
 			return ['팔로워' => 0, '팔로잉'=> 0, '친구' => 0, '내팔로워' => 0, '내팔로잉' => 0];
 		}
-		static $list = [];
-		if(!isset($list[$member_srl]))
+		if(!isset($this->count_info[$member_srl]))
 		{
 			$member_srl2 = is_object($logged_info = \Context::get('logged_info')) && $logged_info->member_srl ? $logged_info->member_srl : 0;
 			$oDB = DB::getInstance();
@@ -68,11 +79,11 @@ class ElkhabookModel extends Elkhabook
 			LEFT JOIN `member_friend` AS `f2`
 				ON f2.member_srl = f.target_srl
 				AND f2.target_srl = f.member_srl;", $member_srl2, $member_srl2, $member_srl, $member_srl2);
-			$list[$member_srl] = (array)$oDB->fetch($result);
+			$this->count_info[$member_srl] = (array)$oDB->fetch($result);
 		}
-		return $list[$member_srl];
+		return $this->count_info[$member_srl];
 	}
-	public function getElkhabookFriendList(INT $member_srl = 0)
+	public function getElkhabookFriendList(INT $member_srl = 0) : \baseObject
 	{
 		$friend_list = ['팔로워' => [], '팔로잉'=> [], '친구' => []];
 		$type = isset($friend_list[\Context::get('friend_type')]) ? (STRING)\Context::get('friend_type') : '';
@@ -199,6 +210,7 @@ class ElkhabookModel extends Elkhabook
 		$oTemplateHandler = \TemplateHandler::getInstance();
 		$tpl = $oTemplateHandler->compile($this->module_path . "skins/$config->skin", __FUNCTION__);
 		$this->add(__FUNCTION__, $tpl);
+		return $this;
 	}
 
 	public function voted_count($member_srl = 0) : int
@@ -216,15 +228,15 @@ class ElkhabookModel extends Elkhabook
 			return 0;
 		}
 		// voted_count 추가
-		if(static::$voted_count===FALSE)
+		if(!isset($this->voted_counts[$member_srl]))
 		{
-			$args = new stdClass();
+			$args = new \stdClass();
 			$args->member_srl = $member_srl;
 			$voted_count = executeQuery('elkhabook.getVotedCount', $args)->data->voted_count;
 
-			static::$voted_count = $voted_count > 0 ? $voted_count : 0;
+			$this->voted_counts[$member_srl] = $voted_count > 0 ? $voted_count : 0;
 		}
-		return static::$voted_count;
+		return $this->voted_counts[$member_srl];
 	}
 
 	public function level($member_srl = 0) : array
@@ -233,20 +245,12 @@ class ElkhabookModel extends Elkhabook
 		{
 			return [0,0];
 		}
-		$oPointModel = getModel('point');
-		$point = $oPointModel->getPoint($member_srl);
-		$oModuleModel = getModel('module');
-		$point_config = $oModuleModel->getModuleConfig('point');
-		$level = $oPointModel->getLevel($point, $point_config->level_step);
-		return [(INT)$point, (INT)$level, $point_config->point_name];
+		$point = \PointModel::getPoint($member_srl);
+		$point_config = \ModuleModel::getModuleConfig('point');
+		$level = \PointModel::getLevel($point, $point_config->level_step);
+		return [(INT)$point, $level, $point_config->point_name];
 	}
 
-	public function setMemberInfo() : bool
-	{
-		// 사용 안 함. dispElkhabookIndex 에서 사용.
-		$_member_info = \Context::get('_member_info');
-		return is_object($_member_info) && $_member_info->member_srl > 0;
-	}
 	public function getCategoryCmt(INT $member_srl) : array
 	{
 		static $doc_list = [];
@@ -265,12 +269,12 @@ class ElkhabookModel extends Elkhabook
 				return $doc_list[$member_srl];
 			}
 			$args = new \stdClass();
-			$args->member_srl = $member_srl;
+			$args->member_srl = $member_srl < 0 && isset($this->member_srl_groups[abs($member_srl)]) ? $this->member_srl_groups[abs($member_srl)] : $member_srl;
 			$data = executeQueryArray('elkhabook.getCategoryCmt', $args)->data;
 			foreach($data as $val)
 			{
 				$continue = false;
-				if(is_string($val->mid) && strlen($val->mid))
+				if(is_string($val->mid) && strlen($val->mid) && !in_array($val->module_srl ?? 0, $this->_excludeModuleSrls() ?? []))
 				{
 					foreach($config->doc_list as $regex => $v)
 					{
@@ -290,7 +294,6 @@ class ElkhabookModel extends Elkhabook
 									$count++;
 								}
 								$doc_list[$member_srl][$regex]['docs'][$count] = $val;
-
 
 								$continue = true;
 								break;
@@ -331,12 +334,12 @@ class ElkhabookModel extends Elkhabook
 				return $doc_list[$member_srl];
 			}
 			$args = new \stdClass();
-			$args->member_srl = $member_srl;
+			$args->member_srl = $member_srl < 0 && isset($this->member_srl_groups[abs($member_srl)]) ? $this->member_srl_groups[abs($member_srl)] : $member_srl;
 			$data = executeQueryArray('elkhabook.getCategory', $args)->data;
 			foreach($data as $val)
 			{
 				$continue = false;
-				if(is_string($val->mid) && strlen($val->mid))
+				if(is_string($val->mid) && strlen($val->mid) && !in_array($val->module_srl ?? 0, $this->_excludeModuleSrls() ?? []))
 				{
 					foreach($config->doc_list as $regex => $v)
 					{
@@ -379,36 +382,461 @@ class ElkhabookModel extends Elkhabook
 		}
 		return $doc_list[$member_srl];
 	}
-	public function getElkhabookList()
+	public function content_grant(int $member_srl, string $contents) : bool
 	{
-		$act = isset($this->act) && strlen($this->act) ? $this->act : \Context::get('act');
-		if($act == __FUNCTION__)
+		if($contents == 'open')
 		{
-			if(!($member_srl = (INT)\Context::get('member_srl')) || !is_object($member_info = \MemberModel::getMemberInfoByMemberSrl($member_srl)) || $member_info->member_srl != $member_srl)
+			return true;
+		}
+		$logged_info = \Context::get('logged_info');
+		$member_srl_me = $logged_info->member_srl ?? 0;
+		if($member_srl == $member_srl_me)
+		{
+			return true;
+		}
+		if($contents == 'logged')
+		{
+			return $member_srl_me > 0;
+		}
+		else if($contents != 'hide' && $member_srl_me > 0)
+		{
+			static $contents_list = [];
+			if(!isset($contents_list[$member_srl]))
 			{
-				$member_info = new stdClass();
-				$member_info->member_srl = 0;
-				$member_info->nick_name = '?';
+				$args = [
+					'member_srl' => [$member_srl, $member_srl_me],
+					'target_srl' => [$member_srl, $member_srl_me]
+					//'list_count' => ?
+				];
+				$data = executeQueryArray('elkhabook.getFriends', $args, ['member_srl', 'target_srl'])->data;
+				$contents_list[$member_srl] = [];
+				foreach($data as $val)
+				{
+					// 자기자신을 추가한 경우가 있나?
+					if($val->member_srl == $val->target_srl)
+					{
+						continue;
+					}
+					if($val->member_srl == $member_srl_me)
+					{
+						$contents_list[$member_srl]['follower'] = true;
+					}
+					if($val->target_srl == $member_srl_me)
+					{
+						$contents_list[$member_srl]['following'] = true;
+					}
+				}
+				if(isset($contents_list[$member_srl]['following']) && isset($contents_list[$member_srl]['follower']))
+				{
+					$contents_list[$member_srl]['friends'] = true;
+				}
 			}
-			\Context::set('_member_info', $member_info);
+			if(isset($contents_list[$member_srl][$contents]))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	public function content_groups(int $member_srl, \stdClass $module_info, array $extra_info) : array
+	{
+		$config = $this->getConfig();
+		if(in_array($module_info->module_srl ?? 0, $this->_excludeModuleSrls() ?? []))
+		{
+			return [];
+		}
+		list($doc_type, $show_count, $page, $cpage, $epage) = $extra_info;
+		$output = [];
+
+		foreach($config->content_groups as $arr)
+		{
+			$idx = '';
+			if(strlen($type = $this->doc_types[$doc_type] ?? '')) // | 친구 | 팔로잉 | 팔로워
+			{
+				if(strpos($arr[0], $type) === false)
+				{
+					continue;
+				}
+				$idx = $doc_type;
+			}
+			else if(strlen($doc_type))
+			{
+				continue;
+			}
+			else
+			{
+				foreach($this->doc_types as $key => $val)
+				{
+					if(strpos($arr[0], $val) !== false)
+					{
+						$type = $val;
+						$idx = $key;
+						break;
+					}
+				}
+			}
+
+			$my_config = $this->my_config($member_srl, $arr);
+			if(strpos($arr[0], '문서') !== false)
+			{
+				if($epage || $cpage)
+				{
+					continue;
+				}
+
+				if($page && !strlen($doc_type) && strlen($idx))
+				{
+					continue;
+				}
+
+				if($module_info->module_srl ?? 0)
+				{
+					$label = '<a href="'.getUrl('','mid',$module_info->mid).'">'.$this->getBrowserTitle($module_info->module_srl).'</a> ';
+				}
+				else
+				{
+					$label = \Context::replaceUserLang($arr[1]);
+				}
+
+				$class = strlen($idx) ? "document {$idx}" : 'document';
+
+				if($show_count-- <= 0)
+				{
+					$doc_list = $this->createObject();
+					$doc_list->data = [];
+					$doc_list->page_navigation = new \PageHandler(0, 0, 0);
+				}
+				else if(strlen($my_config[0] ?? '') && $this->content_grant($member_srl, $my_config[0]))
+				{
+					$doc_list = $this->getDocList($member_srl, $page, $module_info->module_srl ?? 0, $type);
+				}
+				else
+				{
+					$msg = \Context::getLang('msg_not_permitted');// . ' [' . \Context::getLang("elkhabook_contents_{$my_config[0]}") . ']';
+					$doc_list = $this->createObject(-1, $msg);
+					$doc_list->data = [];
+					$doc_list->page_navigation = new \PageHandler(0, 0, 0);
+				}
+
+				$output[$class] = [
+					$label,
+					$doc_list,
+					'page',
+					[$idx, $arr[0]],
+					$my_config //$arr[3]
+				];
+			}
+			else if(strpos( $arr[0], '댓글') !== false)
+			{
+				if($epage || $page)
+				{
+					continue;
+				}
+
+				if($cpage && !strlen($doc_type) && strlen($idx))
+				{
+					continue;
+				}
+
+				if($module_info->module_srl ?? 0)
+				{
+					$label = '<a href="'.getUrl('','mid',$module_info->mid).'">'.$this->getBrowserTitle($module_info->module_srl).'</a> ' . \Context::getLang('comment');
+				}
+				else
+				{
+					$label = \Context::replaceUserLang($arr[1]);
+				}
+
+				$class = strlen($idx) ? "comment {$idx}" : 'comment';
+
+				if($show_count-- <= 0)
+				{
+					$doc_list = $this->createObject();
+					$doc_list->data = [];
+					$doc_list->page_navigation = new \PageHandler(0, 0, 0);
+				}
+				else if(strlen($my_config[0] ?? '') && $this->content_grant($member_srl, $my_config[0]))
+				{
+					$doc_list = $this->getCmtList($member_srl, $cpage, $module_info->module_srl ?? 0, $type);
+				}
+				else
+				{
+					$msg = \Context::getLang('msg_not_permitted');// . ' [' . \Context::getLang("elkhabook_contents_{$my_config[0]}") . ']';
+					$doc_list = $this->createObject(-1, $msg);
+					$doc_list->data = [];
+					$doc_list->page_navigation = new \PageHandler(0, 0, 0);
+				}
+
+				$output[$class] = [
+					$label,
+					$doc_list,
+					'cpage',
+					[$idx, $arr[0]],
+					$my_config //$arr[3]
+				];
+			}
+			else if($arr[0] == '채팅' && !$cpage && !$page && count($config->elkhatalk_rooms))
+			{
+				if($show_count-- <= 0)
+				{
+					$doc_list = $this->createObject();
+					$doc_list->data = [];
+					$doc_list->page_navigation = new \PageHandler(0, 0, 0);
+				}
+				else if(strlen($my_config[0] ?? '') && $this->content_grant($member_srl, $my_config[0]))
+				{
+					$doc_list = $this->getChatList($member_srl, $epage);
+				}
+				else
+				{
+					$msg = \Context::getLang('msg_not_permitted');// . ' [' . \Context::getLang("elkhabook_contents_{$my_config[0]}") . ']';
+					$doc_list = $this->createObject(-1, $msg);
+					$doc_list->data = [];
+					$doc_list->page_navigation = new \PageHandler(0, 0, 0);
+				}
+				$output['chat'] = [
+					\Context::replaceUserLang($arr[1]),
+					$doc_list,
+					'epage',
+					['', $arr[0]],
+					$my_config //$arr[3]
+				];
+			}
+		}
+
+		return $output;
+	}
+	public function getElkhabookList() : \baseObject
+	{
+		$_member_info = $this->_member_info();
+		\Context::set('_member_info', $_member_info);
+		if(!$_member_info->member_srl)
+		{
+			return $this->stop('msg_not_exists_member');
+		}
+
+		// html 처리했던 코드 이식하기.
+		$params = [];
+		$params['elkhabook_config'] = $config = $this->getConfig();
+		$params['module_srl'] = 0;
+		$params['page'] = $page = (INT)\Context::get('page');
+		$params['cpage'] = $cpage = (INT)\Context::get('cpage');
+		$params['epage'] = $epage = (INT)\Context::get('epage');
+		$params['_module_info'] = null;
+		$params['oModel'] = $this;
+		$params['doc_type'] = $doc_type = (STRING)\Context::get('doc_type');
+
+		if(strlen($board = (STRING)\Context::get('board')) && !in_array($board, $config->exclude_list ?? []))
+		{
+			$module_info = \ModuleModel::getModuleInfoByMid($board);
+			$match = false;
+			foreach($config->doc_list as $regex => $val)
+			{
+				if(preg_match($regex, $board))
+				{
+					$match = TRUE;
+					break;
+				}
+			}
+			if($match && is_object($module_info) && ($module_info->module_srl ?? 0) && $module_info->mid == $board)
+			{
+				$params['_module_info'] = $module_info;
+				$params['module_srl'] = $module_info->module_srl;
+			}
+			else
+			{
+				$board = '';
+			}
+		}
+		$params['board'] = $board;
+		$params['output'] = $this->content_groups($_member_info->member_srl, $params['_module_info'] ?: new \stdClass, [$doc_type, (INT)\Context::get('show_count') ?: 99, $page, $cpage, $epage]);
+
+		foreach($params as $key => $val)
+		{
+			\Context::set($key, $val);
+		}
+
+		$oTemplateHandler = \TemplateHandler::getInstance();
+		$tpl = $oTemplateHandler->compile($this->module_path . "skins/{$config->skin}", __FUNCTION__);
+		$this->add(__FUNCTION__, $tpl);
+
+		// 굳이 트리거로 분리한 이유: 다른 모듈에서 어떤 식으론가 레벨아이콘 같은 대응을 원할 수 있으므로, 이 코드를 참고해서 트리거를 만들 수 있다.
+		// 트리거 선언을 유의할 것: 이 예제는 html view(=dispElkhabookIndex) 에 대응하지 않으므로 ajax 일 때만.
+		$act = __FUNCTION__;
+		getController('module')->addTriggerFunction("act:elkhabook.{$act}", 'after', function($oModule) use($config, $act) {
+			if($config->point_level_icon == 'off')
+			{
+				return;
+			}
+			$addon_config = \AddonModel::getAddonConfig('point_level_icon') ?: new \stdClass;
+			if($config->point_level_icon == 'auto')
+			{
+				$type = Rhymix\Framework\UA::isMobile() ? 'mobile' : 'pc';
+				$site_srl = \Context::get('site_module_info')->site_srl ?? 0;
+				$cache_key = "object:{$act}_{$type}_{$site_srl}";
+				$cache_val = Rhymix\Framework\Cache::get($cache_key);
+				if(!is_object($cache_val) || !isset($cache_val->activated))
+				{
+					$oAddonAdminModel = \AddonAdminModel::getInstance();
+					$cache_val = new \stdClass();
+					$cache_val->activated = $oAddonAdminModel->isActivatedAddon('point_level_icon', $site_srl, $type);
+					Rhymix\Framework\Cache::set($cache_key, $cache_val, 600);
+				}
+				if(!$cache_val->activated)
+				{
+					return;
+				}
+			}
+
+			require_once \RX_BASEDIR . 'addons/point_level_icon/point_level_icon.lib.php';
+			$temp_output = preg_replace_callback('!<(div|span|a)([^\>]*)member_([0-9\-]+)([^\>]*)>(.*?)\<\/(div|span|a)\>!is', function($matches) use($addon_config) {
+				return pointLevelIconTrans($matches, $addon_config);
+			}, $oModule->get($act));
+			if(strlen($temp_output))
+			{
+				$oModule->add($act, $temp_output);
+			}
+		});
+		return $this;
+	}
+	public function sequence(array $member_srls) : int
+	{
+		$sequence = count($this->member_srl_groups);
+		while(isset($this->member_srl_groups[$sequence]))
+		{
+			$sequence++;
+		}
+		$this->member_srl_groups[$sequence] = $member_srls;
+		return $sequence * -1;
+	}
+	public function getFriendListByType(int $member_srl, string $type) : array
+	{
+		static $data = [];
+
+		if(!isset($data[$member_srl]))
+		{
+			$data[$member_srl] = [$type => []];
+		}
+		else if(!isset($data[$member_srl][$type]))
+		{
+			$data[$member_srl][$type] = [];
+		}
+		else
+		{
+			return $data[$member_srl][$type];
+		}
+		// 혹시 카운트 변수가 이미 0 으로 캐싱되었다면.
+		if(isset($this->count_info[$member_srl][$type]) && !(INT)$this->count_info[$member_srl][$type])
+		{
+			// 팔로워, 팔로잉은 친구 수도 검증.
+			if($type == '친구' || (isset($this->count_info[$member_srl]['친구']) && !(INT)$this->count_info[$member_srl]['친구']))
+			{
+				return [];
+			}
+		}
+		if($type == '친구')
+		{
+			$_data = executeQueryArray('elkhabook.getFriendListFriend', ['member_srl' => $member_srl], ['f.member_srl'])->data;
+		}
+		else if($type == '팔로잉')
+		{
+			$_data = executeQueryArray('elkhabook.getFollowingList', ['member_srl' => $member_srl], ['f.target_srl member_srl'])->data;
+		}
+		else if($type == '팔로워')
+		{
+			$_data = executeQueryArray('elkhabook.getFollowerList', ['target_srl' => $member_srl], ['f.member_srl'])->data;
+		}
+		else
+		{
+			return [];
+		}
+		foreach($_data as $val)
+		{
+			$data[$member_srl][$type][] = (INT)$val->member_srl;
+		}
+
+		return $data[$member_srl][$type];
+		/*if(count($types) == 1)
+		{
+			return $data[$member_srl][ array_first($types) ];
+		}
+		return array_unique(array_merge(
+			in_array('팔로잉', $types) ? $data[$member_srl]['팔로잉'] : [],
+			in_array('팔로워', $types) ? $data[$member_srl]['팔로워'] : [],
+			in_array('친구', $types) ? $data[$member_srl]['친구'] : []
+		));*/
+	}
+	public function getVoteList(/*array|*/object $args) : \baseObject
+	{
+		/*$args = [
+			'member_srl' => $obj[0],
+			'page' => $obj[1]
+		];
+		if($obj[2] ?? 0)
+		{
+			$args['module_srl'] = $obj[2];
+		}*/
+		$output = executeQueryArray('elkhabook.getVoteList', $args);
+		$data = [];
+		foreach($output->data as $key => $attribute)
+		{
+			$data[$key] = new \DocumentItem();
+			$data[$key]->setAttribute($attribute, false);
+		}
+		$output->data = $data;
+		return $output;
+	}
+	public function getScrapList(object $args) : \baseObject
+	{
+		$output = executeQueryArray('elkhabook.getScrapList', $args);
+		$data = [];
+		foreach($output->data as $key => $attribute)
+		{
+			$data[$key] = new \DocumentItem();
+			$data[$key]->setAttribute($attribute, false);
+		}
+		$output->data = $data;
+		return $output;
+	}
+	public function getDocList(INT $member_srl, INT $page, INT $module_srl = 0, string $type = '') : \baseObject
+	{
+		if($type == '추천' || $type == '스크랩')
+		{
+			$obj = new \stdClass();
+			$obj->member_srl = $member_srl;
+			$sequence = $member_srl;
+		}
+		else
+		{
+			if(strlen($type))
+			{
+				$member_srls = $this->getFriendListByType($member_srl, $type);
+
+				if(!count($member_srls))
+				{
+					$output = $this->createObject();
+					$output->data = [];
+					$output->page_navigation = new \PageHandler(0, 0, 0);
+					return $output;
+				}
+				$sequence = $this->sequence($member_srls);
+			}
+			else
+			{
+				$member_srls = [abs($member_srl)];
+				$sequence = $member_srl;
+			}
+			$obj = new \stdClass();
+			$obj->member_srl = $member_srls;
+			$obj->sort_index = 'list_order';
+			$obj->order_type = 'ASC';
 		}
 
 		$config = $this->getConfig();
-		$oTemplateHandler = \TemplateHandler::getInstance();
-		$tpl = $oTemplateHandler->compile($this->module_path . "skins/$config->skin", __FUNCTION__);
-		$this->add(__FUNCTION__, $tpl);
-	}
-	public function getDocList(INT $member_srl, INT $page, INT $module_srl = 0) : \baseObject
-	{
-		$config = $this->getConfig();
-		$obj = new stdClass();
-		$obj->member_srl = $member_srl;
 		$obj->list_count = $config->list_count;
-		$obj->sort_index = 'list_order';
-		$obj->order_type = 'ASC';
 		$obj->page = $page ?: 1;
 
-		$module_srls = array_keys($this->getCategory($member_srl)['__module_srls']);
+		$module_srls = array_keys($this->getCategory($sequence)['__module_srls']);
 		if($module_srl)
 		{
 			if(in_array($module_srl, $module_srls))
@@ -428,23 +856,51 @@ class ElkhabookModel extends Elkhabook
 			$obj->module_srl = implode(',', $module_srls);
 		}
 
-		//$columns = array('document_srl','title','content','regdate','module_srl');
-		$oDocumentModel = getModel('document');
-		$output = $oDocumentModel->getDocumentList($obj, FALSE, FALSE/*, $columns*/);
-		return $output;
+		if($type == '추천')
+		{
+			return $this->getVoteList($obj);
+		}
+		else if($type == '스크랩')
+		{
+			return $this->getScrapList($obj);
+		}
+		else
+		{
+			//$columns = array('document_srl','title','content','regdate','module_srl');
+			return \DocumentModel::getDocumentList($obj, FALSE, FALSE/*, $columns*/);
+		}
 	}
 
-	public function getCmtList(INT $member_srl, INT $page = 1, INT $module_srl = 0) : \baseObject
+	public function getCmtList(INT $member_srl, INT $page = 1, INT $module_srl = 0, string $type = '') : \baseObject
 	{
+		if(strlen($type))
+		{
+			$member_srls = $this->getFriendListByType($member_srl, $type);
+
+			if(!count($member_srls))
+			{
+				$output = $this->createObject();
+				$output->data = [];
+				$output->page_navigation = new \PageHandler(0, 0, 0);
+				return $output;
+			}
+			$sequence = $this->sequence($member_srls);
+		}
+		else
+		{
+			$member_srls = [abs($member_srl)];
+			$sequence = $member_srl;
+		}
+
 		//$oModel = getModel('comment');
 		//$comments = $oModel->getCommentListByMemberSrl($member_srl, ['comment_srl'], 1, FALSE, $list_count);
 		$config = $this->getconfig();
 		$args = new stdClass();
-		$args->member_srl = $member_srl;
+		$args->member_srl = $member_srls;//abs($member_srl);
 		$args->list_count = $config->list_count;
 		$args->page = $page ?: 1;
 
-		$module_srls = array_keys($this->getCategoryCmt($member_srl)['__module_srls']);
+		$module_srls = array_keys($this->getCategoryCmt($sequence)['__module_srls']);
 		if($module_srl)
 		{
 			if(in_array($module_srl, $module_srls))
@@ -468,14 +924,12 @@ class ElkhabookModel extends Elkhabook
 		unset($args->member_srl);
 		$output = executeQueryArray('elkhabook.getCommentList', $args);
 
-		$oDocumentModel = getModel('document');
 		require_once(_XE_PATH_.'modules/comment/comment.item.php');
 		foreach($output->data as $key => $comment)
 		{
-			$comment->member_srl = $member_srl;
 			$oComment = new commentItem(0);
 			$oComment->setAttribute($comment);
-			$oComment->oDocument = $oDocumentModel->getDocument($oComment->get('document_srl'), FALSE, FALSE);
+			$oComment->oDocument = \DocumentModel::getDocument($oComment->get('document_srl'), FALSE, FALSE);
 			$output->data[$key] = $oComment;
 		}
 		return $output;
@@ -488,7 +942,7 @@ class ElkhabookModel extends Elkhabook
 			$module_info = \ModuleModel::getModuleInfoByModuleSrl($module_srl);
 			if(is_object($module_info) && $module_info->module_srl == $module_srl)
 			{
-				$title_list[$module_srl] = $module_info->browser_title;
+				$title_list[$module_srl] = \Context::replaceUserLang($module_info->browser_title);
 			}
 			else
 			{
@@ -525,11 +979,11 @@ class ElkhabookModel extends Elkhabook
 		$args->member_srl = $member_srl;
 		return executeQueryArray('member.getMemberModifyNickName', $args)->data;
 	}
-	public function getChatList(INT $member_srl, INT $page, int $room = 0)
+	public function getChatList(INT $member_srl, INT $page, int $room = 0) : \baseObject
 	{
 		$config = $this->getconfig();
 
-		$args = new stdClass();
+		$args = new \stdClass();
 		$args->member_srl = $member_srl;
 		$args->list_count = $config->list_count;
 		$args->page = $page ?: 1;
@@ -564,7 +1018,7 @@ class ElkhabookModel extends Elkhabook
 		}
 		return $output;
 	}
-	public function getChatListByPk(INT $pk = 0, INT $page_count = 7)
+	public function getChatListByPk(INT $pk = 0, INT $page_count = 7) : \baseObject
 	{
 		$config = $this->getConfig();
 		$pk_less_prev = 0; // 이전 페이지 존재하는지 체크하기.
@@ -635,74 +1089,60 @@ class ElkhabookModel extends Elkhabook
 		}
 		return $output;
 	}
-	public function isAccessible($obj) : bool
+	public function isAccessible(object $obj) : bool
 	{
 		if(isset($obj->elkhatalk))
 		{
 			return TRUE;
 		}
-		if( $obj->get('document_srl') )
+		if(!($module_srl = (int)$obj->get('module_srl')) || $module_srl == abs($obj->get('member_srl')) || !is_object($module_info = \ModuleModel::getModuleInfoByModuleSrl($module_srl)) || !($module_info->module_srl ?? 0))
 		{
-			$oDocument = \DocumentModel::getDocument($obj->get('document_srl'), FALSE, FALSE);
-			return $oDocument->isAccessible(TRUE);
+			return false;
 		}
-		return FALSE;
-	}
-	public static function getBadges($chzzkid) {
-		$cacheKey = 'elkhabook:badges:' . $chzzkid;
-		$cached = \Rhymix\Framework\Cache::get($cacheKey);
-		if ($cached !== null) {
-			return $cached;
-		}
-
-		$url = 'http://127.0.0.1:9333/api/badges/' . $chzzkid;
-
-		$ch = curl_init();
-		curl_setopt($ch, CURLOPT_URL, $url);
-		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ch, CURLOPT_TIMEOUT, 3);
-		$response = curl_exec($ch);
-		
-		if(!$response)
+		$logged_info = \Context::get('logged_info');
+		if(!is_object($logged_info) || !($logged_info->member_srl ?? 0))
 		{
-			return '';
-		}
-
-		$json = json_decode($response);
-		if(!$json || !$json->success || !isset($json->data))
-		{
-			return '';
-		}
-
-		$data = $json->data;
-		$html = [];
-
-		if(isset($data->subscription) && is_object($data->subscription) && isset($data->subscription->badge) && isset($data->subscription->badge->imageUrl))
-		{
-			$tier = $data->subscription->tier ?? 0;
-			$tier_name = $tier == 2 ? '호감고닉' : ($tier == 1 ? '고닉' : '구독');
-			$month = $data->subscription->accumulativeMonth ?? 0;
-			$alt = sprintf('%s %d개월 구독중', $tier_name, $month);
-			$html[] = sprintf('<img src="%s" alt="%s" title="%s" style="height:18px;vertical-align:middle;margin-right:3px">', $data->subscription->badge->imageUrl, $alt, $alt);
-		}
-
-		if(isset($data->viewerBadges) && is_array($data->viewerBadges))
-		{
-			$badge_map = [];
-			foreach($data->viewerBadges as $val)
+			if((int)$logged_info->member_srl != (int)$obj->get('member_srl') && ($logged_info->is_admin ?? 'N') != 'Y' && in_array($module_srl, $this->_excludeModuleSrls()))
 			{
-				if(isset($val->badge) && isset($val->badge->imageUrl))
-				{
-					$badge_id = $val->badge->badgeId ?? '';
-					$alt = isset($badge_map[$badge_id]) ? $badge_map[$badge_id] : $badge_id;
-					$html[] = sprintf('<img src="%s" alt="%s" title="%s" style="height:18px;vertical-align:middle;margin-right:3px">', $val->badge->imageUrl, $alt, $alt);
-				}
+				return false;
 			}
 		}
 
-		$result = implode('', $html);
-		\Rhymix\Framework\Cache::set($cacheKey, $result, 3600);
 
-		return $result;
+		if( $obj->get('comment_srl') || $obj->get('document_srl') )
+		{
+			if($obj->get('comment_srl'))
+			{
+				$oDocument = \DocumentModel::getDocument($obj->get('document_srl'), false, false);
+				if(!$oDocument->isAccessible())
+				{
+					return false;
+				}
+			}
+			if(($module_info->consultation ?? 'N') == 'N')
+			{
+				return $obj->isAccessible(TRUE);
+			}
+		}
+
+		return FALSE;
+	}
+	protected function _excludeModuleSrls() : array
+	{
+		static $module_srls;
+		if(!count($module_srls ?? []))
+		{
+			$module_srls = [];
+			$config = $this->getConfig();
+			foreach($config->exclude_list ?? [] as $mid)
+			{
+				$module_info = \ModuleModel::getModuleInfoByMid($mid);
+				if(is_object($module_info) && ($module_info->module_srl ?? 0))
+				{
+					$module_srls[] = (int)$module_info->module_srl;
+				}
+			}
+		}
+		return $module_srls;
 	}
 }

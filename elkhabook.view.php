@@ -2,7 +2,7 @@
 
 class ElkhabookView extends Elkhabook
 {
-	public function init()
+	public function init() : \baseObject
 	{
 		foreach($this->_acts as $act => $val)
 		{
@@ -26,20 +26,21 @@ class ElkhabookView extends Elkhabook
 		return $this->stop('msg_invalid_request');
 	}
 
-	public function triggerBeforeDispMemberModule($oModule)
+	public function triggerBeforeDispMemberModule($oModule) : object
 	{
-		if(Context::getRequestMethod() != 'GET')
+		if(\Context::getRequestMethod() != 'GET')
 		{
 			return $oModule;
 		}
-		$url = $this->getUrl(Context::get('act'), (INT)Context::get('member_srl'));
+		$url = $this->getUrl((STRING)\Context::get('act'), (INT)\Context::get('member_srl'));
 		if($url != '')
 		{
 			header("Location: $url");
 			exit;
 		}
+		return $oModule;
 	}
-	public function dispElkhabookIndex()
+	public function dispElkhabookIndex() : \baseObject
 	{
 		$config = $this->getConfig();
 		$target_srl = (INT)\Context::get('member_srl') ?: (INT)\Context::get('document_srl') ?: (INT)\Context::get('target_srl') ?: 0;
@@ -59,20 +60,9 @@ class ElkhabookView extends Elkhabook
 		}
 		if(!$target_srl)
 		{
-			if(is_object($logged_info = \Context::get('logged_info')) && $logged_info->member_srl)
+			if(is_object($logged_info = \Context::get('logged_info')) && ($logged_info->member_srl ?? 0))
 			{
-				if($config->user_id_open == 'Y')
-				{
-					header('Location: ' . getNotEncodedUrl('mid', $config->source_mid, 'target_id', $logged_info->user_id));
-				}
-				else if($config->user_id_open == 'nick_name')
-				{
-					header('Location: ' . getNotEncodedUrl('mid', $config->source_mid, 'target_id', $logged_info->nick_name));
-				}
-				else
-				{
-					header('Location: ' . getNotEncodedUrl('mid', $config->source_mid, 'member_srl', $logged_info->member_srl, 'target_id', ''));
-				}
+				header('Location: ' . static::getUrl('dispMemberInfo', $logged_info->member_srl), true, 302);
 				exit;
 			}
 			return $this->stop('msg_not_logged');
@@ -84,33 +74,17 @@ class ElkhabookView extends Elkhabook
 		}
 
 		// $oModel->setMemberInfo 에서 옮겨옴.
-		if(is_object($logged_info = \Context::get('logged_info')) && ($logged_info->member_srl == $target_srl))
-		{
-			$member_info = $logged_info;
-		}
-		else
-		{
-			$member_info = \MemberModel::getMemberInfoByMemberSrl($target_srl);
-		}
+		$member_info = $this->_member_info($target_srl);
 		\Context::loadLang('modules/member/lang');
-		if(is_object($member_info) && $member_info->member_srl)
+		\Context::set('_member_info', $member_info);
+		if($member_info->member_srl)
 		{
-			$args = new \stdClass();
-			$args->member_srl = $member_info->member_srl;
-			$args->service = 'chzzk';
-			$chzzkInfo = executeQuery('sociallogin.getMemberSns', $args)->data;
-			$member_info->chzzk = $chzzkInfo;
-			
-			\Context::set('_member_info', $member_info);
-			\Context::setBrowserTitle( $config->browser_title . " - $member_info->nick_name");
+			\Context::setBrowserTitle("{$config->browser_title} - {$member_info->nick_name}");
 		}
 		else
 		{
-			$member_info = new stdClass();
-			$member_info->member_srl = 0;
-			$member_info->nick_name = '?';
 			\Context::setBrowserTitle( \Context::getLang('msg_not_exists_member') );
-			\Context::set('_member_info', $member_info);
 		}
+		return $this;
 	}
 }

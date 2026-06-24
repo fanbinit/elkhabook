@@ -14,7 +14,7 @@
 		<column name="modules.browser_title" />
 	</columns>
 	<conditions>
-		<condition operation="equal" column="documents.member_srl" var="member_srl" notnull="notnull" />
+		<condition operation="in" column="documents.member_srl" var="member_srl" notnull="notnull" />
 	</conditions>
 	<groups>
 		<group column="module_srl" />
