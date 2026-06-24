@@ -1145,4 +1145,61 @@ class ElkhabookModel extends Elkhabook
 		}
 		return $module_srls;
 	}
+	public static function getBadges($chzzkid) {
+		$cacheKey = 'elkhabook:badges:' . $chzzkid;
+		$cached = \Rhymix\Framework\Cache::get($cacheKey);
+		if ($cached !== null) {
+			return $cached;
+		}
+
+		$url = 'http://127.0.0.1:9333/api/badges/' . $chzzkid;
+
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_URL, $url);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+		$response = curl_exec($ch);
+		
+		if(!$response)
+		{
+			return '';
+		}
+
+		$json = json_decode($response);
+		if(!$json || !$json->success || !isset($json->data))
+		{
+			return '';
+		}
+
+		$data = $json->data;
+		$html = [];
+
+		if(isset($data->subscription) && is_object($data->subscription) && isset($data->subscription->badge) && isset($data->subscription->badge->imageUrl))
+		{
+			$tier = $data->subscription->tier ?? 0;
+			$tier_name = $tier == 2 ? '호감고닉' : ($tier == 1 ? '고닉' : '구독');
+			$month = $data->subscription->accumulativeMonth ?? 0;
+			$alt = sprintf('%s %d개월 구독중', $tier_name, $month);
+			$html[] = sprintf('<img src="%s" alt="%s" title="%s" style="height:18px;vertical-align:middle;margin-right:3px">', $data->subscription->badge->imageUrl, $alt, $alt);
+		}
+
+		if(isset($data->viewerBadges) && is_array($data->viewerBadges))
+		{
+			$badge_map = [];
+			foreach($data->viewerBadges as $val)
+			{
+				if(isset($val->badge) && isset($val->badge->imageUrl))
+				{
+					$badge_id = $val->badge->badgeId ?? '';
+					$alt = isset($badge_map[$badge_id]) ? $badge_map[$badge_id] : $badge_id;
+					$html[] = sprintf('<img src="%s" alt="%s" title="%s" style="height:18px;vertical-align:middle;margin-right:3px">', $val->badge->imageUrl, $alt, $alt);
+				}
+			}
+		}
+
+		$result = implode('', $html);
+		\Rhymix\Framework\Cache::set($cacheKey, $result, 3600);
+
+		return $result;
+	}
 }

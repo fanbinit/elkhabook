@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <skin version="0.2">
-	<title>팬비닛 커스텀</title>
+	<title>팬비닛 커스텀 스킨</title>
 	<version>1.0.0</version>
-	<date>2020-01-21</date>
+	<date>2026-06-25</date>
 	<author email_address="m@elkha.kr" link="http://elkha.kr/">
 		<name>엘카</name>
+	</author>
+	<author email_address="webmaster@fanbinit.us" link="https://fanbinit.us/">
+		<name>팬비닛</name>
 	</author>
 </skin>

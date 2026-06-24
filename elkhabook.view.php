@@ -79,6 +79,12 @@ class ElkhabookView extends Elkhabook
 		\Context::set('_member_info', $member_info);
 		if($member_info->member_srl)
 		{
+			$args = new \stdClass();
+			$args->member_srl = $member_info->member_srl;
+			$args->service = 'chzzk';
+			$chzzkInfo = executeQuery('sociallogin.getMemberSns', $args)->data;
+			$member_info->chzzk = $chzzkInfo;
+			\Context::set('_member_info', $member_info);
 			\Context::setBrowserTitle("{$config->browser_title} - {$member_info->nick_name}");
 		}
 		else
